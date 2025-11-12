@@ -112,6 +112,26 @@ class Tables:
             if not self.findTable(tablename):
                 return tablename
     
+    def capacity(self) -> tuple[int, int]:
+        """
+        Report the total table and seat capacity.
+
+        Args:
+            None.
+
+        Returns:
+            tables, seats.
+
+        Raises:
+            None.
+        """
+        tableCount = 0
+        seatCount = 0
+        for table in self.tables:
+            tableCount += 1
+            seatCount += table.seats
+        return tableCount, seatCount
+
     def namelist(self) -> list[str]:
         """
         Return an array of table names.
@@ -151,23 +171,7 @@ class Tables:
         self.tables.append(table)
         self.save()
 
-    def deleteTable(self, table: Table) -> None:
-        """
-        Delete a table from our list
-
-        Args:
-            table: Table.
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError if table is not in list.
-        """
-        self.tables.remove(table)
-        self.save()
-
-    def findTable(self, name: str) -> Table:
+    def findTable(self, tablename: str) -> Table:
         """
         Find a table by name.
 
@@ -181,9 +185,28 @@ class Tables:
             None.
         """
         for table in self.tables:
-            if name == table.name:
+            if tablename == table.name:
                 return table
         return None
+
+    def deleteTable(self, tablename: str) -> None:
+        """
+        Delete a table by name from our list
+
+        Args:
+            table: Table.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError if table is not in list.
+        """
+        table = self.findTable(tablename)
+        if not table:
+            raise exceptions.InternalError
+        self.tables.remove(table)
+        self.save()
 
 
 #
@@ -195,6 +218,12 @@ class Booking:
     A Booking object tracks the state of a specific booking, which includes the
     table, phone, start time, and reservation period.
     """
+    
+    @classmethod
+    def WalkIn(cls, tablename: str):
+        booking = cls(tablename, "Walk-In Guest", "", datetime.time(hour=0,minute=0,second=0), datetime.time(hour=23,minute=59,second=59))
+        booking.walkInGuest = True
+        return booking
 
     @classmethod
     def compareByStartKey(cls, bk: 'Booking') -> datetime.datetime:
@@ -237,7 +266,10 @@ class Booking:
         todate = datetime.datetime.today().date()
         self.start = datetime.datetime.combine(todate, start)
         self.period = period
-    
+
+    def keyString(self) -> str:
+        return "-".join([self.tablename, self.name, self.phone, str(self.start), str(self.period)])
+
     def expired(self, now: datetime.datetime) -> bool:
         # never expired because we only book during "one day"
         False
@@ -327,7 +359,14 @@ class Booking:
             None.
         """
 
-        return  """
+        if self.walkInGuest:
+            return \
+            """
+            Walk-In Guest  
+            """
+        else:
+            return \
+                """
                 **{0}** / *{1}*  
                 **{2}** / *{3}*  
                 """.format(self.start.strftime("%H:%M"), self.period.strftime("%H:%M"), self.name, self.phone)
@@ -363,12 +402,38 @@ class Bookings:
         tables = Tables()
         now = datetime.datetime.now()
         self.bookings = [bk for bk in self.bookings if self.validBooking(bk, tables, now)]
+        return tables
 
     def validBooking(self, bk: Booking, tables: Tables, now: datetime.datetime) -> bool:
         """
         Return true iff booking is still valid
         """
         return tables.findTable(bk.tablename) and not bk.expired(now)
+
+    def utilization(self) -> tuple[int, int]:
+        """
+        Report the utilized (non-free) tables and seats.
+
+        Args:
+            None.
+
+        Returns:
+            tables, seats.
+
+        Raises:
+            None.
+        """
+        tables = self.tableGC()
+        utilized = { }
+        tableCount = 0
+        seatCount = 0
+        for bk in self.bookings:
+            table = tables.findTable(bk.tablename)
+            if not bk.tablename in utilized:
+                utilized[bk.tablename] = True
+                tableCount += 1
+                seatCount += table.seats
+        return tableCount, seatCount
 
     def tableStatus(self):
         """
@@ -471,3 +536,40 @@ class Bookings:
         self.tableGC()
         self.bookings = [bk for bk in self.bookings if not bk.equals(booking)]
         self.save()
+
+    def walkIn(self, tablename: str) -> None:
+        """
+        Take the table for a walkIn customer, overriding any booking.
+
+        Args:
+            tablename.
+
+        Returns:
+            None.
+
+        Raises:
+            TableBusyError if already taken for a walkIn.
+        """
+        booking = Booking.WalkIn(tablename)
+        if self.bookingDuplicate(booking):
+            raise exceptions.TableBusyError
+        self.bookings.append(booking)
+        self.save()
+
+    def walkOut(self, tablename: str) -> None:
+        """
+        Release the table from a walkIn customer.
+
+        Args:
+            tablename.
+
+        Returns:
+            None.
+
+        Raises:
+            TableFreeError if not already taken for a walkIn.
+        """
+        booking = Booking.WalkIn(tablename)
+        if not self.bookingDuplicate(booking):
+            raise exceptions.TableFreeError
+        self.delete(booking)

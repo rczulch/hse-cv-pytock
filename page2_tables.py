@@ -3,7 +3,7 @@
 #
 
 import streamlit as st
-import pytock_data
+import exceptions
 import validators
 import restaurant
 
@@ -16,20 +16,33 @@ st.markdown("### Tables")
 def clearErrors():
     st.session_state["tables_errors"] = []
 
-book_table = st.selectbox("Select table", ("table 1", "table 2", "table 3"), key="book_table", on_change=clearErrors)
+tables = restaurant.Tables()
+bookings = restaurant.Bookings()
+
+man_tablename = st.selectbox("Table", tables.namelist(), key="man_tablename", on_change=clearErrors)
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.button("Take the table")
+    if st.button("Take the table"):
+        try:
+            st.toast("The Table is Taken")
+            bookings.walkIn(man_tablename)
+        except exceptions.TableBusyError:
+            st.warning("The table was already taken")
 
 with col2:
-    st.button("Release the table")
+    if st.button("Release the table"):
+        try:
+            bookings.walkOut(man_tablename)
+            st.info("The Table is Released")
+        except exceptions.TableFreeError:
+            st.warning("The table was already released")
 
 with col4:
-    st.button("Delete")
+    if st.button("Delete"):
+        tables.deleteTable(man_tablename)
 
-tables = restaurant.Tables()
-table_name = st.text_input("Name of table", value=tables.defName(), on_change=clearErrors)
+table_name = st.text_input("Name of table to Add", value=tables.defName(), on_change=clearErrors)
 table_seats = st.number_input("Number of seats", value=restaurant.Tables.DEF_SEATS, on_change=clearErrors)
 added = st.button("Add")
 if added:

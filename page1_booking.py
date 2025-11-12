@@ -101,12 +101,18 @@ if len(tables.tables) == 0:
 else:
     status = bookings.tableStatus()
     for table in tables.tables:
-        col_table, col_state, col_delete = st.columns(3)
+        col_table, col_state = st.columns(2)
         with col_table:
             st.markdown(table.description())
         with col_state:
+            col_time, col_delete = st.columns(2)
             if not table.name in status:
-                st.markdown("*Free*")
+                with col_time:
+                    st.markdown("*Free*")
             else:
                 for booking in status[table.name]:
-                    st.markdown(booking.description())
+                    with col_time:
+                        st.markdown(booking.description())
+                    with col_delete:
+                        if st.button("Delete", key=booking.keyString()):
+                            bookings.delete(booking)
