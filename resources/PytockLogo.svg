@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.w3.org/2000/svg" xmlns:xl="http://www.w3.org/1999/xlink" version="1.1" viewBox="-153 -46 860 652" width="860" height="652">
+  <defs/>
+  <g id="Canvas_1" stroke="none" stroke-opacity="1" fill-opacity="1" stroke-dasharray="none" fill="none">
+    <title>Canvas 1</title>
+    <g id="Canvas_1_Layer_2">
+      <title>Layer 2</title>
+      <g id="Graphic_12">
+        <path d="M -18.734108 320.96682 C -36.88312 331.556 -60.56105 329.07268 -76.11682 313.51682 C -94.62776 295.006 -94.62776 264.994 -76.11682 246.48318 C -69.94022 240.30654 -62.483094 236.1909 -54.6 234.13624 L -54.6 197.4627 C -71.7876 199.948 -88.34823 207.80288 -101.57264 221.02736 C -134.14251 253.59706 -134.14251 306.40294 -101.57264 338.97264 C -71.90689 368.63854 -25.45266 371.2836 7.206851 346.9078 Z M 24.1962 329.956 C 48.691583 297.2889 46.08373 250.7383 16.37264 221.02736 C 3.1482283 207.80288 -13.412396 199.948 -30.6 197.4627 L -30.6 234.13624 C -22.716906 236.1909 -15.259778 240.30654 -9.083176 246.48318 C 6.519683 262.08595 8.970897 285.86006 -1.7295323 304.03027 Z" fill="blue"/>
+      </g>
+      <g id="Graphic_13">
+        <text transform="translate(75.32179 163)" fill="black">
+          <tspan font-family="Chakra Petch" font-weight="bold" font-size="180" fill="black" x=".8913782" y="179" xml:space="preserve">pytock</tspan>
+        </text>
+      </g>
+    </g>
+  </g>
+</svg>

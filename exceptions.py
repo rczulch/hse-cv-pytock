@@ -13,3 +13,7 @@ class InvalidInputError(CustomError):
 class DuplicateNameError(CustomError):
     """Raised when creating a named resource that already exists."""
     pass
+
+class TableBusyError(CustomError):
+    """Raised when booking a table that is already busy."""
+    pass
