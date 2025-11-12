@@ -60,6 +60,22 @@ class Table:
         
         self.name = name
         self.seats = seats
+    
+    def description(self):
+        """
+        Display a short description: string <name> - <N> seats.
+
+        Args:
+            None.
+
+        Returns:
+            string.
+
+        Raises:
+            None.
+        """
+
+        return f"{self.name} - {self.seats} seats"
 
 
 #
@@ -74,6 +90,7 @@ class Tables:
 
     # class constants
     MAX_SEATS = 12
+    DEF_SEATS = 4
 
     def __init__(self):
         self.reload()
@@ -86,6 +103,31 @@ class Tables:
 
     def save(self):
         pytock_data.set("restaurant_tables", self.tables)
+
+    def defName(self) -> str:
+        counter = 0
+        while True:
+            counter += 1
+            tablename = f"Table {counter}"
+            if not self.findTable(tablename):
+                return tablename
+    
+    def namelist(self) -> list[str]:
+        """
+        Return an array of table names.
+
+        Args:
+            name: The name must be a non-empty, unique string.
+            seats: Must be an integer from 1 through 10.
+
+        Returns:
+            The new table object.
+
+        Raises:
+            InvalidInputError: invalid name or seats argument
+            DuplicateNameError: a table with that name already exists
+        """
+        return [table.name for table in self.tables]
 
     def createTable(self, name: str, seats: int) -> Table:
         """
@@ -155,16 +197,11 @@ class Booking:
     """
 
     @classmethod
-    def compareByStart(cls, bk1, bk2):
-        if bk1.start < bk2.start:
-            return -1
-        elif bk1.start > bk2.start:
-            return 1
-        else:
-            return 0
+    def compareByStartKey(cls, bk: 'Booking') -> datetime.datetime:
+        return bk.start
 
     @classmethod
-    def defBookingTime(cls):
+    def defBookingTime(cls) -> datetime.datetime:
         """
         Provide a default booking time.
         """
@@ -185,23 +222,115 @@ class Booking:
         return rounded_time
 
     @classmethod
-    def defBookingPeriod(cls):
+    def defBookingPeriod(cls) -> datetime.datetime:
         return datetime.timedelta(minutes=90) + datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)
 
     @classmethod
-    def maxBookingTime(cls):
+    def maxBookingTime(cls) -> datetime.time:
         # maximum table booking time is 8 hours
         return datetime.time(8, 0)
 
-    def __init__(self, table, name, phone, start, period):
-        self.table = table
+    def __init__(self, tablename, name, phone, start, period):
+        self.tablename = tablename
         self.name = name
         self.phone = phone
-        self.start = start
+        todate = datetime.datetime.today().date()
+        self.start = datetime.datetime.combine(todate, start)
         self.period = period
     
-    def expired(self, now):
-        complete = datetime.timedelta()
+    def expired(self, now: datetime.datetime) -> bool:
+        # never expired because we only book during "one day"
+        False
+    
+    def overlap(self, booking: 'Booking') -> bool:
+        """
+        True iff the other booking overlaps us in time and table.
+
+        Args:
+            None.
+
+        Returns:
+            bool.
+
+        Raises:
+            None.
+        """
+
+        if self.tablename != booking.tablename:
+            return False
+        our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
+        his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
+        if booking.start < our_end and his_end >= self.start:
+            return True
+        if self.start < his_end and our_end >= booking.start:
+            return True
+        False
+    
+    def duplicate(self, booking: 'Booking') -> bool:
+        """
+        True iff the other booking overlaps us in time and name/phone.
+
+        Args:
+            None.
+
+        Returns:
+            bool.
+
+        Raises:
+            None.
+        """
+
+        if self.name != booking.name or self.phone != booking.phone:
+            return False
+        our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
+        his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
+        if booking.start < our_end and his_end >= self.start:
+            return True
+        if self.start < his_end and our_end >= booking.start:
+            return True
+        False
+
+    def equals(self, booking: 'Booking') -> bool:
+        """
+        True iff the other booking matches us exactly.
+            <time> / <period>
+            <name> / <phone>
+
+        Args:
+            None.
+
+        Returns:
+            string.
+
+        Raises:
+            None.
+        """
+        return self.tablename == booking.tablename \
+            and self.name == booking.name \
+            and self.phone == booking.phone \
+            and self.start == booking.start \
+            and self.period == booking.period
+
+    def description(self) -> str:
+        """
+        Display a description string:
+            <time> / <period>
+            <name> / <phone>
+
+        Args:
+            None.
+
+        Returns:
+            string.
+
+        Raises:
+            None.
+        """
+
+        return  """
+                **{0}** / *{1}*  
+                **{2}** / *{3}*  
+                """.format(self.start.strftime("%H:%M"), self.period.strftime("%H:%M"), self.name, self.phone)
 
 
 #
@@ -227,12 +356,6 @@ class Bookings:
     def save(self):
         pytock_data.set("restaurant_bookings", self.bookings)
 
-    def validBooking(self, bk, tables, now):
-        """
-        Return true iff booking is still valid
-        """
-        return tables.findTable(bk.table) and not bk.expired(now)
-
     def tableGC(self):
         """
         Remove bookings that reference missing tables.
@@ -240,6 +363,12 @@ class Bookings:
         tables = Tables()
         now = datetime.datetime.now()
         self.bookings = [bk for bk in self.bookings if self.validBooking(bk, tables, now)]
+
+    def validBooking(self, bk: Booking, tables: Tables, now: datetime.datetime) -> bool:
+        """
+        Return true iff booking is still valid
+        """
+        return tables.findTable(bk.tablename) and not bk.expired(now)
 
     def tableStatus(self):
         """
@@ -259,17 +388,55 @@ class Bookings:
         self.tableGC()
         output = { }
         for bk in self.bookings:
-            if output[bk.table]:
-                output[bk.table].append(bk)
+            if bk.tablename in output:
+                output[bk.tablename].append(bk)
             else:
-                output[bk.table] = [bk]
-        for table, bookings in output:
-            bookings.sort(cmp=Booking.compareByStart)
+                output[bk.tablename] = [bk]
+        for table, bookings in output.items():
+            bookings.sort(key=Booking.compareByStartKey)
         return output
 
-    def add(self, booking):
+    def bookingAvailable(self, booking: Booking) -> bool:
         """
-        Add a booking.
+        Check if a new booking would conflict in time and table.
+
+        Args:
+            Booking object.
+
+        Returns:
+            True if available, otherwise False.
+
+        Raises:
+            None.
+        """
+        self.tableGC()
+        for bk in self.bookings:
+            if bk.overlap(booking):
+                return False
+        return True
+
+    def bookingDuplicate(self, booking: Booking) -> bool:
+        """
+        Check if a new booking would conflict in time and name/phone.
+
+        Args:
+            Booking object.
+
+        Returns:
+            True if duplicated, otherwise False.
+
+        Raises:
+            None.
+        """
+        self.tableGC()
+        for bk in self.bookings:
+            if bk.duplicate(booking):
+                return True
+        return False
+
+    def add(self, booking: Booking) -> bool:
+        """
+        Add a booking if the time and table are available.
 
         Args:
             Booking object.
@@ -280,3 +447,27 @@ class Bookings:
         Raises:
             TableBusyError.
         """
+        if self.bookingDuplicate(booking):
+            raise exceptions.DuplicateBookingError
+        if not self.bookingAvailable(booking):
+            raise exceptions.TableBusyError
+        self.bookings.append(booking)
+        self.save()
+        return True
+
+    def delete(self, booking: Booking) -> None:
+        """
+        Delete a matching booking.
+
+        Args:
+            Booking object.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        self.tableGC()
+        self.bookings = [bk for bk in self.bookings if not bk.equals(booking)]
+        self.save()

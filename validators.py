@@ -63,12 +63,23 @@ def validate_timePeriod(timePeriod):
         return None, timePeriod
 
 
-# validate_table
+# validate_tablename
 #
 # Ensure the table name string is valid, returning <error>, <table>.
 #
-def validate_table(table):
-    if len(table) == 0:
+def validate_tablename(tablename):
+    if len(tablename) == 0:
         return "Table Choice Required", None
     else:
-        return None, table
+        return None, tablename
+
+
+# validate_seats
+#
+# Ensure the seat count is valid, returning <error>, <seats>.
+#
+def validate_seats(seats):
+    if seats < 1 or seats > restaurant.Tables.MAX_SEATS:
+        return f"Seats must be in the range 1..{restaurant.Tables.MAX_SEATS}", None
+    else:
+        return None, seats

@@ -3,6 +3,7 @@
 #
 
 import streamlit as st
+import exceptions
 import pytock_data
 import validators
 import restaurant
@@ -19,7 +20,10 @@ def text_change():
 #
 
 def clearErrors():
-    st.session_state["submit_errors"] = []
+    st.session_state["booking_errors"] = []
+
+tables = restaurant.Tables()
+bookings = restaurant.Bookings()
 
 book_name = st.text_input("Input name", key="book_name", on_change=clearErrors)
 book_phone = st.text_input("Input phone", key="book_phone", placeholder="+7 (999) 999 99-99", on_change=clearErrors)
@@ -33,8 +37,7 @@ with col_right:
     defperiod = restaurant.Booking.defBookingPeriod()
     book_period = st.time_input("Period", key="book_period", value=defperiod, step=900, on_change=clearErrors)
 
-book_table = st.selectbox("Select table", ("table 1", "table 2", "table 3"), key="book_table", on_change=clearErrors)
-bookings = restaurant.Bookings()
+book_tablename = st.selectbox("Select table", tables.namelist(), key="book_tablename", on_change=clearErrors)
 
 submitted = st.button("Submit")
 if submitted:
@@ -52,7 +55,7 @@ if submitted:
     if error:
         errors.append(error)
     else:
-        book_name = text
+        book_phone = text
 
     # timeOfDay check
     error, tod = validators.validate_timeOfDay(book_from)
@@ -69,35 +72,41 @@ if submitted:
         book_period = time
 
     # table syntactical check
-    error, text = validators.validate_table(book_table)
+    error, text = validators.validate_tablename(book_tablename)
     if error:
         errors.append(error)
     else:
-        book_table = text
+        book_tablename = text
 
     if len(errors) == 0:
-        booking = restaurant.Booking(book_table, book_name, book_phone, book_from, book_period)
+        booking = restaurant.Booking(book_tablename, book_name, book_phone, book_from, book_period)
         try:
             bookings.add(booking)
-        except Exception as error:
-            errors.append(error)
+        except exceptions.TableBusyError:
+            errors.append("Table not available during that time")
+        except exceptions.DuplicateBookingError:
+            errors.append("Customer is already booked during that time")
 
     # save and report any errors
-    st.session_state["submit_errors"] = errors
+    st.session_state["booking_errors"] = errors
     for error in errors:
         st.error(error)
 
-### display bookings here
-
-
 #
-# Table status page
+# Table status
 #
 
-tables = pytock_data.get("book_table")
-if not tables:
-    st.markdown("No tables defined. Please add some on **Table Management** page.")
+if len(tables.tables) == 0:
+    st.markdown(f"No tables defined. Please add some on **Table Management** page.")
 else:
-    for table in tables:
+    status = bookings.tableStatus()
+    for table in tables.tables:
         col_table, col_state, col_delete = st.columns(3)
-
+        with col_table:
+            st.markdown(table.description())
+        with col_state:
+            if not table.name in status:
+                st.markdown("*Free*")
+            else:
+                for booking in status[table.name]:
+                    st.markdown(booking.description())

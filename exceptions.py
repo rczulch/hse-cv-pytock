@@ -17,3 +17,7 @@ class DuplicateNameError(CustomError):
 class TableBusyError(CustomError):
     """Raised when booking a table that is already busy."""
     pass
+
+class DuplicateBookingError(CustomError):
+    """Raised when booking a table that conflicts with another by the same name/phone."""
+    pass
