@@ -1,18 +1,28 @@
 #
 # pytock.py
 #
+# Main streamlit file for the restaurant reservation project.
+# HSE AI & CV Program
+# Object Oriented Programming course
+#
+# submitted by Richard Zulch
+#
+# Usage: streamlit run pytock.py
+#
+# Note: "tock" is a popular restaurant management system in the US,
+# so this is named "pytock" to follow pythonic naming conventions.
+#
 
-import time
 import streamlit as st
-import pytock_data
 
 #
-# logo with size override to make larger
+# Logo with size override in HTML to make larger
 #
 
 st.logo(
     "resources/PytockLogo.svg",
-    size="large"
+    size="large",
+    link="https://www.exploretock.com"
 )
 
 st.html("""

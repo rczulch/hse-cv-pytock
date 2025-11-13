@@ -1,17 +1,24 @@
 #
 # page3_status.py
 #
+# Streamlit code for the pytock project.
+#
 
 import streamlit as st
-import pytock_data
 import restaurant
 
-st.markdown("### Status")
 
 #
 # Table status
 #
 
+st.markdown("### Status")
+
+# tables & bookings
+#
+# Please see restaurant.py for more information about these classes. Instances
+# are created on the fly each time our page runs.
+#
 tables = restaurant.Tables()
 bookings = restaurant.Bookings()
 
@@ -23,6 +30,14 @@ st.markdown("""
 
             -----
             """.format(totalTables-usedTables, totalTables, totalSeats-usedSeats, totalSeats))
+
+#
+# Table status
+#
+# This organizes the status by first table, and then possibly multiple bookings
+# for each table. In a real system one might prefer to show strictly in time
+# order, however the assignment examples had table first so we use that here.
+#
 
 if len(tables.tables) != 0:
     status = bookings.tableStatus()

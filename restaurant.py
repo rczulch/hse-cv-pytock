@@ -1,7 +1,18 @@
 #
 # restaurant.py
 #
-# Restaurant-oriented class definitions.
+# Restaurant-oriented class definitions. Class defintions here are:
+#
+#   Table  - an object representing a specific table that can be booked
+#   Tables - an object representing a collection of tables having unique names.
+#   Booking - a specific booking with name/phone/start/period/table
+#   Bookings - a collection of bookings
+#
+# These are POD objects to make it easy to manage them in streamlit. Backend
+# storage is just the streamlit shared cache resource, so callers may freely
+# instantiate the collections, which are read from the cache. This simplifies
+# change detection and notification to other browsers and tabs sharing our
+# backend, so that UI updates can occur in real time.
 #
 
 import exceptions
@@ -11,6 +22,8 @@ import pytock_data
 
 #
 # Table class
+#
+# Just POD with some additional semantics important to tables.
 #
 
 class Table:
@@ -47,9 +60,19 @@ class Table:
         if not isinstance(seats, int) or seats < 1 or seats > Table.MAX_SEATS:
             raise exceptions.InvalidInputError(f"invalid seats argument '{seats}'")
         
-        self.name = name
-        self.seats = seats
-    
+        self._name = name
+        self._seats = seats
+
+    @property
+    def name(self):
+        """Name of the table."""
+        return self._name
+
+    @property
+    def seats(self):
+        """Number of seats at the table."""
+        return self._seats
+
     def description(self):
         """
         Display a short description: string <name> - <N> seats.
@@ -70,6 +93,17 @@ class Table:
 #
 # Tables class
 #
+# A Tables object is a collection of Table objects, where the "source of truth"
+# and backing data storage is the shared streamlit backend resource cache.
+# Callers may instantiate a new Tables() object at any time and it will have the
+# latest data.
+#
+# The Tables class enforces unique names among the Table objects, and offers
+# demographics like total tables and seats as well as the usual CRUD operations.
+#
+# To avoid being annoying during testing, this creates 3 default tables when it
+# is first initializes, but allows all tables to be deleted.
+#
 
 class Tables:
     """
@@ -82,18 +116,27 @@ class Tables:
     DEF_SEATS = 4
 
     def __init__(self):
-        self.reload()
+        """
+        Read latest state
+        """
+        self.__reload()
 
-    def reload(self):
+    def __reload(self):
         self.tables = pytock_data.get("restaurant_tables")
         if not isinstance(self.tables, list):       # allow tables list to be empty
             self.tables = [Table("Table 1", 4), Table("Table 2", 4), Table("Table 3", 6)]
-            self.save()
+            self.__save()
 
-    def save(self):
+    def __save(self):
+        """
+        Save our state
+        """
         pytock_data.set("restaurant_tables", self.tables)
 
     def defName(self) -> str:
+        """
+        Return a unique default name for a possible new table.
+        """
         counter = 0
         while True:
             counter += 1
@@ -157,7 +200,7 @@ class Tables:
         table = Table(name, seats)
         self.tables.append(table)
         self.tables.sort(key=Table.compareByStartKey)
-        self.save()
+        self.__save()
         return table
 
     def findTable(self, tablename: str) -> Table:
@@ -195,11 +238,17 @@ class Tables:
         if not table:
             raise exceptions.InternalError
         self.tables.remove(table)
-        self.save()
+        self.__save()
 
 
 #
 # Booking class
+#
+# Just POD with some additional semantics important to bookings. There are two
+# types of bookings:
+#   - advance bookings with customer name / phone / start time / period
+#   - walk-in bookings with none of those parameters, created with the WalkIn
+#     class method. The start time is arranged to sort before advance bookings.
 #
 
 class Booking:
@@ -221,7 +270,7 @@ class Booking:
     @classmethod
     def defBookingTime(cls) -> datetime.datetime:
         """
-        Provide a default booking time.
+        Provide a default booking time with no conflict resolution.
         """
 
         # get current time + 1 hour
@@ -249,19 +298,56 @@ class Booking:
         return datetime.time(8, 0)
 
     def __init__(self, tablename, name, phone, start, period):
-        self.tablename = tablename
-        self.name = name
-        self.phone = phone
+        self._tablename = tablename
+        self._name = name
+        self._phone = phone
         todate = datetime.datetime.today().date()
-        self.start = datetime.datetime.combine(todate, start)
-        self.period = period
-        self.walkInGuest = False
+        self._start = datetime.datetime.combine(todate, start)
+        self._period = period
+        self._walkInGuest = False
+
+    @property
+    def tablename(self):
+        """Name of the booked table."""
+        return self._tablename
+
+    @property
+    def name(self):
+        """Customer name."""
+        return self._name
+
+    @property
+    def phone(self):
+        """Customer phone."""
+        return self._phone
+
+    @property
+    def start(self):
+        """Start datetime.datetime."""
+        return self._start
+
+    @property
+    def period(self):
+        """Period datetime.time."""
+        return self._period
+
+    @property
+    def walkInGuest(self):
+        """Customer phone."""
+        return self._walkInGuest
+
+    @walkInGuest.setter
+    def walkInGuest(self, value: bool):
+        """Walk-in flag."""
+        if self._walkInGuest and not value:
+            raise exceptions.InternalError                  # cannot unset this
+        self._walkInGuest = value
 
     def keyString(self) -> str:
         return "-".join([self.tablename, self.name, self.phone, str(self.start), str(self.period)])
 
     def expired(self, now: datetime.datetime) -> bool:
-        # never expired because we only book during "one day"
+        # bookings never expire because we live in a timeless world
         False
     
     def overlap(self, booking: 'Booking') -> bool:
@@ -286,7 +372,7 @@ class Booking:
             return True
         False
     
-    def duplicate(self, booking: 'Booking') -> bool:
+    def duplicate(self, booking: 'Booking', matchTable: bool = False) -> bool:
         """
         True iff the other booking overlaps us in time and name/phone. 
 
@@ -301,6 +387,8 @@ class Booking:
         """
 
         if self.name != booking.name or self.phone != booking.phone:
+            return False
+        if matchTable and booking.tablename != self.tablename:
             return False
         if self.overlap(booking):
             return True
@@ -359,6 +447,33 @@ class Booking:
 #
 # Bookings class
 #
+# A Bookings object is a collection of Booking objects, where the "source of
+# truth" and backing data storage is the shared streamlit backend resource
+# cache. Callers may instantiate a new Bookings() object at any time and it will
+# have the latest data.
+#
+# Bookings references tables, but the reverse is carefully avoided. A Table is
+# created or deleted without any notice to Bookings, so it is necessary to check
+# that all referenced tables exist when performing booking operations. Bookings
+# with missing tables are culled when identified by the self.__tableGC() method.
+# Design alternatives would require more coupling between tables and bookings,
+# which is better avoided where possible.
+#
+# Conflict management is quite simplified from the real world. Customers are the
+# same if their name and phone number match exactly. Customers may have as many
+# bookings as they like that do not overlap, but they may not book more than one
+# table at any given time.
+#
+# Because this is a classroom project it does not actually track real time. The
+# date/time model used here is a single day where the period of a booking can
+# overflow to the next day. Obviously in a real system bookings would be used or
+# expired, but here we are apart from time and tables are considered "free" only
+# when they have no bookings at any time.
+#
+# WalkIns are just another booking, except that they are in addition to any
+# existing advance booking for the table involved. At most one walkIn is allowed
+# for each table.
+#
 
 class Bookings:
     """
@@ -368,28 +483,34 @@ class Bookings:
     """
 
     def __init__(self):
-        self.reload()
+        self.__reload()
 
-    def reload(self):
+    def __reload(self):
+        """
+        Read latest state
+        """
         self.bookings = pytock_data.get("restaurant_bookings")
         if not self.bookings:
             self.bookings = []
-            self.save()
+            self.__save()
 
-    def save(self):
+    def __save(self):
+        """
+        Save our state
+        """
         pytock_data.set("restaurant_bookings", self.bookings)
 
-    def tableGC(self):
+    def __tableGC(self):
         """
         Remove bookings that reference missing tables.
         """
         tables = Tables()
         now = datetime.datetime.now()
-        self.bookings = [bk for bk in self.bookings if self.validBooking(bk, tables, now)]
-        self.save()
+        self.bookings = [bk for bk in self.bookings if self.__validBooking(bk, tables, now)]
+        self.__save()
         return tables
 
-    def validBooking(self, bk: Booking, tables: Tables, now: datetime.datetime) -> bool:
+    def __validBooking(self, bk: Booking, tables: Tables, now: datetime.datetime) -> bool:
         """
         Return true iff booking is still valid
         """
@@ -408,7 +529,7 @@ class Bookings:
         Raises:
             None.
         """
-        tables = self.tableGC()
+        tables = self.__tableGC()
         utilized = { }
         tableCount = 0
         seatCount = 0
@@ -420,7 +541,7 @@ class Bookings:
                 seatCount += table.seats
         return tableCount, seatCount
 
-    def tableStatus(self):
+    def tableStatus(self) -> dict:
         """
         Report the booking status by tables.
 
@@ -435,14 +556,14 @@ class Bookings:
             None.
         """
 
-        self.tableGC()
+        self.__tableGC()
         output = { }
         for bk in self.bookings:
             if bk.tablename in output:
                 output[bk.tablename].append(bk)
             else:
                 output[bk.tablename] = [bk]
-        for table, bookings in output.items():
+        for tablename, bookings in output.items():
             bookings.sort(key=Booking.compareByStartKey)
         return output
 
@@ -460,13 +581,13 @@ class Bookings:
         Raises:
             None.
         """
-        self.tableGC()
+        self.__tableGC()
         for bk in self.bookings:
             if bk.tablename == booking.tablename and bk.overlap(booking):
                 return False
         return True
 
-    def bookingDuplicate(self, booking: Booking) -> bool:
+    def bookingDuplicate(self, booking: Booking, matchTable: bool = False) -> bool:
         """
         Check if a new booking would conflict in time and name/phone. This is
         useful for checking if the customer has an existing booking during the
@@ -481,9 +602,9 @@ class Bookings:
         Raises:
             None.
         """
-        self.tableGC()
+        self.__tableGC()
         for bk in self.bookings:
-            if bk.duplicate(booking):
+            if bk.duplicate(booking, matchTable):
                 return True
         return False
 
@@ -505,12 +626,12 @@ class Bookings:
         if not self.bookingAvailable(booking):
             raise exceptions.TableBusyError
         self.bookings.append(booking)
-        self.save()
+        self.__save()
         return True
 
     def delete(self, booking: Booking) -> None:
         """
-        Delete a matching booking.
+        Delete a matching booking if it exists.
 
         Args:
             Booking object.
@@ -521,9 +642,9 @@ class Bookings:
         Raises:
             None.
         """
-        self.tableGC()
+        self.__tableGC()
         self.bookings = [bk for bk in self.bookings if not bk.equals(booking)]
-        self.save()
+        self.__save()
     
     def walkInAvailable(self, tablename: str) -> bool:
         """
@@ -541,7 +662,7 @@ class Bookings:
         if not tablename:
             return False
         booking = Booking.WalkIn(tablename)
-        return not self.bookingDuplicate(booking)
+        return not self.bookingDuplicate(booking, True)
 
     def walkIn(self, tablename: str) -> None:
         """
@@ -557,10 +678,10 @@ class Bookings:
             TableBusyError if already taken for a walkIn.
         """
         booking = Booking.WalkIn(tablename)
-        if self.bookingDuplicate(booking):
+        if self.bookingDuplicate(booking, True):
             raise exceptions.TableBusyError
         self.bookings.append(booking)
-        self.save()
+        self.__save()
 
     def walkOut(self, tablename: str) -> None:
         """
@@ -576,6 +697,6 @@ class Bookings:
             TableFreeError if not already taken for a walkIn.
         """
         booking = Booking.WalkIn(tablename)
-        if not self.bookingDuplicate(booking):
+        if not self.bookingDuplicate(booking, True):
             raise exceptions.TableFreeError
         self.delete(booking)
