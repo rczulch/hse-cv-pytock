@@ -10,21 +10,6 @@ import pytock_data
 
 
 #
-# Restaurant class
-#
-
-class Restaurant:
-    """
-    A Restaurant object maintains lists of tables and bookings. It can be 
-    expanded to additional restaurant-oriented semantics if needed in the future
-    """
-
-    def __init__(self):
-        self.tables = Tables()
-        self.bookings = Bookings()
-
-
-#
 # Table class
 #
 
@@ -37,6 +22,10 @@ class Table:
 
     # class constants
     MAX_SEATS = 12
+
+    @classmethod
+    def compareByStartKey(cls, table: 'Table') -> str:
+        return table.name
 
     def __init__(self, name: str, seats: int):
         """
@@ -97,7 +86,7 @@ class Tables:
 
     def reload(self):
         self.tables = pytock_data.get("restaurant_tables")
-        if not self.tables:
+        if not isinstance(self.tables, list):       # allow tables list to be empty
             self.tables = [Table("Table 1", 4), Table("Table 2", 4), Table("Table 3", 6)]
             self.save()
 
@@ -134,18 +123,16 @@ class Tables:
 
     def namelist(self) -> list[str]:
         """
-        Return an array of table names.
+        Get the sorted list of table names.
 
         Args:
-            name: The name must be a non-empty, unique string.
-            seats: Must be an integer from 1 through 10.
+            None.
 
         Returns:
-            The new table object.
+            an array of strings.
 
         Raises:
-            InvalidInputError: invalid name or seats argument
-            DuplicateNameError: a table with that name already exists
+            None.
         """
         return [table.name for table in self.tables]
 
@@ -169,7 +156,9 @@ class Tables:
                 raise exceptions.DuplicateNameError(f"table name {name} already exists")
         table = Table(name, seats)
         self.tables.append(table)
+        self.tables.sort(key=Table.compareByStartKey)
         self.save()
+        return table
 
     def findTable(self, tablename: str) -> Table:
         """
@@ -194,13 +183,13 @@ class Tables:
         Delete a table by name from our list
 
         Args:
-            table: Table.
+            tablename string.
 
         Returns:
             None.
 
         Raises:
-            ValueError if table is not in list.
+            InternalError if table is not in list.
         """
         table = self.findTable(tablename)
         if not table:
@@ -266,6 +255,7 @@ class Booking:
         todate = datetime.datetime.today().date()
         self.start = datetime.datetime.combine(todate, start)
         self.period = period
+        self.walkInGuest = False
 
     def keyString(self) -> str:
         return "-".join([self.tablename, self.name, self.phone, str(self.start), str(self.period)])
@@ -276,7 +266,7 @@ class Booking:
     
     def overlap(self, booking: 'Booking') -> bool:
         """
-        True iff the other booking overlaps us in time and table.
+        True iff the other booking overlaps us in time.
 
         Args:
             None.
@@ -288,8 +278,6 @@ class Booking:
             None.
         """
 
-        if self.tablename != booking.tablename:
-            return False
         our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
         his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
         if booking.start < our_end and his_end >= self.start:
@@ -300,7 +288,7 @@ class Booking:
     
     def duplicate(self, booking: 'Booking') -> bool:
         """
-        True iff the other booking overlaps us in time and name/phone.
+        True iff the other booking overlaps us in time and name/phone. 
 
         Args:
             None.
@@ -314,11 +302,7 @@ class Booking:
 
         if self.name != booking.name or self.phone != booking.phone:
             return False
-        our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
-        his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
-        if booking.start < our_end and his_end >= self.start:
-            return True
-        if self.start < his_end and our_end >= booking.start:
+        if self.overlap(booking):
             return True
         False
 
@@ -402,6 +386,7 @@ class Bookings:
         tables = Tables()
         now = datetime.datetime.now()
         self.bookings = [bk for bk in self.bookings if self.validBooking(bk, tables, now)]
+        self.save()
         return tables
 
     def validBooking(self, bk: Booking, tables: Tables, now: datetime.datetime) -> bool:
@@ -463,7 +448,8 @@ class Bookings:
 
     def bookingAvailable(self, booking: Booking) -> bool:
         """
-        Check if a new booking would conflict in time and table.
+        Check if a new booking would conflict in time and table. This ignores
+        the name and phone.
 
         Args:
             Booking object.
@@ -476,13 +462,15 @@ class Bookings:
         """
         self.tableGC()
         for bk in self.bookings:
-            if bk.overlap(booking):
+            if bk.tablename == booking.tablename and bk.overlap(booking):
                 return False
         return True
 
     def bookingDuplicate(self, booking: Booking) -> bool:
         """
-        Check if a new booking would conflict in time and name/phone.
+        Check if a new booking would conflict in time and name/phone. This is
+        useful for checking if the customer has an existing booking during the
+        same time range.
 
         Args:
             Booking object.
@@ -536,6 +524,24 @@ class Bookings:
         self.tableGC()
         self.bookings = [bk for bk in self.bookings if not bk.equals(booking)]
         self.save()
+    
+    def walkInAvailable(self, tablename: str) -> bool:
+        """
+        True if table available for a walkIn customer, or False otherwise.
+
+        Args:
+            tablename.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        if not tablename:
+            return False
+        booking = Booking.WalkIn(tablename)
+        return not self.bookingDuplicate(booking)
 
     def walkIn(self, tablename: str) -> None:
         """

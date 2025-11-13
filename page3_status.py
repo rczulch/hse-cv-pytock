@@ -3,6 +3,7 @@
 #
 
 import streamlit as st
+import pytock_data
 import restaurant
 
 st.markdown("### Status")

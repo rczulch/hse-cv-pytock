@@ -46,7 +46,10 @@ def get(key):
     global pytockData
     getinit()
     if key in pytockData:
-        return pytockData[key]
+        data = pytockData[key]
+        if isinstance(data, (list,dict)):
+            data = data.copy()
+        return data
     return None
 
 # set
@@ -57,5 +60,7 @@ def set(key, data):
     global pytockData
     getinit()
     if key not in pytockData or pytockData[key] != data:
+        if isinstance(data, (list,dict)):
+            data = data.copy()
         pytockData[key] = data
         rerun_sessions()

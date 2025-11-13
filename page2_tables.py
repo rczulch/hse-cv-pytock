@@ -4,6 +4,7 @@
 
 import streamlit as st
 import exceptions
+import pytock_data
 import validators
 import restaurant
 
@@ -19,28 +20,37 @@ def clearErrors():
 tables = restaurant.Tables()
 bookings = restaurant.Bookings()
 
-man_tablename = st.selectbox("Table", tables.namelist(), key="man_tablename", on_change=clearErrors)
-col1, col2, col3, col4 = st.columns(4)
+st.selectbox("Table", tables.namelist(), key="man_tablename", on_change=clearErrors)
 
+if len(tables.tables) == 0:
+    take_disable = True
+    release_disable = True
+    delete_disable = True
+else:
+    release_disable = bookings.walkInAvailable(st.session_state["man_tablename"])
+    take_disable = not release_disable
+    delete_disable = False
+
+col1, col2, col3, col4 = st.columns(4)
 with col1:
-    if st.button("Take the table"):
+    if st.button("Take the table", disabled=take_disable):
         try:
+            bookings.walkIn(st.session_state["man_tablename"])
             st.toast("The Table is Taken")
-            bookings.walkIn(man_tablename)
         except exceptions.TableBusyError:
             st.warning("The table was already taken")
 
 with col2:
-    if st.button("Release the table"):
+    if st.button("Release the table", disabled=release_disable):
         try:
-            bookings.walkOut(man_tablename)
-            st.info("The Table is Released")
+            bookings.walkOut(st.session_state["man_tablename"])
+            st.toast("The Table is Released")
         except exceptions.TableFreeError:
             st.warning("The table was already released")
 
 with col4:
-    if st.button("Delete"):
-        tables.deleteTable(man_tablename)
+    if st.button("Delete", disabled=delete_disable):
+        tables.deleteTable(st.session_state["man_tablename"])
 
 table_name = st.text_input("Name of table to Add", value=tables.defName(), on_change=clearErrors)
 table_seats = st.number_input("Number of seats", value=restaurant.Tables.DEF_SEATS, on_change=clearErrors)
@@ -49,7 +59,7 @@ if added:
     errors = []
 
     # name check
-    error, text = validators.validate_table(table_name)
+    error, text = validators.validate_tablename(table_name)
     if error:
         errors.append(error)
     else:
