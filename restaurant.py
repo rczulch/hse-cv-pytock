@@ -364,6 +364,8 @@ class Booking:
             None.
         """
 
+        if not booking.walkInGuest and self.walkInGuest:
+            return False                                    # allow booking table with current walk-in
         our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
         his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
         if booking.start < our_end and his_end >= self.start:
