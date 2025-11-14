@@ -28,7 +28,8 @@ st.markdown("### Booking")
 # impossible to clear the errors after user data entry.
 #
 def clearErrors():
-    st.session_state["booking_errors"] = []
+    st.session_state["advertised"] = True                   # clear advertisement
+    st.session_state["booking_errors"] = []                 # clear errors
 
 # tables & bookings
 #
@@ -37,6 +38,17 @@ def clearErrors():
 #
 tables = restaurant.Tables()
 bookings = restaurant.Bookings()
+status = bookings.tableStatus()
+if len(status) > 0:
+    st.session_state["advertised"] = True                   # clear advertisement on first remote booking
+
+# advertise our real-time updating until first user input or remote booking seen
+
+if not "advertised" in st.session_state:
+    st.info( \
+        """
+        Pytock supports multiple-window real-time updates. Please open a second window to see this.
+        """, icon="🔥")
 
 # the following are input fields for adding a booking
 
@@ -136,7 +148,6 @@ if submitted:
 if len(tables.tables) == 0:
     st.markdown(f"No tables defined. Please add some on **Table Management** page.")
 else:
-    status = bookings.tableStatus()
     for table in tables.tables:
         col_table, col_state = st.columns([0.3, 0.7])
         with col_table:

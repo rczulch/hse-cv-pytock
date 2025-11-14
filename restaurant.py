@@ -4,15 +4,17 @@
 # Restaurant-oriented class definitions. Class defintions here are:
 #
 #   Table  - an object representing a specific table that can be booked
-#   Tables - an object representing a collection of tables having unique names.
+#   Tables - a collection of tables having unique names
 #   Booking - a specific booking with name/phone/start/period/table
+#   WalkinBooking - for walk-in customers with no name/phone/timing, just table
 #   Bookings - a collection of bookings
 #
-# These are POD objects to make it easy to manage them in streamlit. Backend
-# storage is just the streamlit shared cache resource, so callers may freely
-# instantiate the collections, which are read from the cache. This simplifies
-# change detection and notification to other browsers and tabs sharing our
-# backend, so that UI updates can occur in real time.
+# These are POD objects to make it easy to manage them in streamlit, i.e. they
+# do not contain pointers to other objects. Backend storage is just the
+# streamlit shared cache resource, so callers may freely instantiate the 
+# collections, which are read from the cache. This simplifies change detection
+# and notification to other browsers and tabs sharing our backend, so that UI
+# updates can occur in real time.
 #
 
 import exceptions
@@ -244,11 +246,8 @@ class Tables:
 #
 # Booking class
 #
-# Just POD with some additional semantics important to bookings. There are two
-# types of bookings:
-#   - advance bookings with customer name / phone / start time / period
-#   - walk-in bookings with none of those parameters, created with the WalkIn
-#     class method. The start time is arranged to sort before advance bookings.
+# Just POD with some additional semantics important to bookings. This is also
+# the parent class of WalkinBooking, defined below.
 #
 
 class Booking:
@@ -256,12 +255,6 @@ class Booking:
     A Booking object tracks the state of a specific booking, which includes the
     table, phone, start time, and reservation period.
     """
-    
-    @classmethod
-    def WalkIn(cls, tablename: str):
-        booking = cls(tablename, "Walk-In Guest", "", datetime.time(hour=0,minute=0,second=0), datetime.time(hour=23,minute=59,second=59))
-        booking.walkInGuest = True
-        return booking
 
     @classmethod
     def compareByStartKey(cls, bk: 'Booking') -> datetime.datetime:
@@ -304,7 +297,6 @@ class Booking:
         todate = datetime.datetime.today().date()
         self._start = datetime.datetime.combine(todate, start)
         self._period = period
-        self._walkInGuest = False
 
     @property
     def tablename(self):
@@ -331,18 +323,6 @@ class Booking:
         """Period datetime.time."""
         return self._period
 
-    @property
-    def walkInGuest(self):
-        """Customer phone."""
-        return self._walkInGuest
-
-    @walkInGuest.setter
-    def walkInGuest(self, value: bool):
-        """Walk-in flag."""
-        if self._walkInGuest and not value:
-            raise exceptions.InternalError                  # cannot unset this
-        self._walkInGuest = value
-
     def keyString(self) -> str:
         return "-".join([self.tablename, self.name, self.phone, str(self.start), str(self.period)])
 
@@ -364,8 +344,6 @@ class Booking:
             None.
         """
 
-        if not booking.walkInGuest and self.walkInGuest:
-            return False                                    # allow booking table with current walk-in
         our_end = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
         his_end = booking.start + datetime.timedelta(hours=booking.period.hour, minutes=booking.period.minute)
         if booking.start < our_end and his_end >= self.start:
@@ -399,8 +377,6 @@ class Booking:
     def equals(self, booking: 'Booking') -> bool:
         """
         True iff the other booking matches us exactly.
-            <time> / <period>
-            <name> / <phone>
 
         Args:
             None.
@@ -420,7 +396,7 @@ class Booking:
     def description(self) -> str:
         """
         Display a description string:
-            <time> / <period>
+            <start time> - <end time>
             <name> / <phone>
 
         Args:
@@ -432,18 +408,64 @@ class Booking:
         Raises:
             None.
         """
+        endtime = self.start + datetime.timedelta(hours=self.period.hour, minutes=self.period.minute)
+        return \
+            """
+            **{0}** - **{1}**  
+            **{2}** / *{3}*  
+            """.format(self.start.strftime("%H:%M"), endtime.strftime("%H:%M"), self.name, self.phone)
 
-        if self.walkInGuest:
-            return \
-            """
-            Walk-In Guest  
-            """
-        else:
-            return \
-                """
-                **{0}** / *{1}*  
-                **{2}** / *{3}*  
-                """.format(self.start.strftime("%H:%M"), self.period.strftime("%H:%M"), self.name, self.phone)
+
+#
+# WalkinBooking class
+#
+# Subclass of Booking implementing the semantics for a walk-in customer. The
+# description text is static and the start time is arranged to sort before the
+# advanced reservations.
+#
+
+class WalkinBooking(Booking):
+    """
+    A WalkinBooking object tracks the state of a walk-in customer booking, which
+    occupies a "layer" in front of the advanced reservations.
+    """
+        
+    def __init__(self, tablename: str):
+        super().__init__(tablename, "Walk-In Guest", "", datetime.time(hour=0,minute=0,second=0), datetime.time(hour=23,minute=59,second=59))
+
+    def overlap(self, booking: 'Booking') -> bool:
+        """
+        True iff the other booking overlaps us in time.
+
+        Args:
+            None.
+
+        Returns:
+            bool.
+
+        Raises:
+            None.
+        """
+
+        if not isinstance(booking, WalkinBooking):
+            return False                                    # allow advance reservation after us
+        return super().overlap(booking)
+
+    def description(self) -> str:
+        """
+        Display our description string as "Walk-In Guest".
+
+        Args:
+            None.
+
+        Returns:
+            string.
+
+        Raises:
+            None.
+        """
+
+        return "Walk-In Guest"
 
 
 #
@@ -663,7 +685,7 @@ class Bookings:
         """
         if not tablename:
             return False
-        booking = Booking.WalkIn(tablename)
+        booking = WalkinBooking(tablename)
         return not self.bookingDuplicate(booking, True)
 
     def walkIn(self, tablename: str) -> None:
@@ -679,7 +701,7 @@ class Bookings:
         Raises:
             TableBusyError if already taken for a walkIn.
         """
-        booking = Booking.WalkIn(tablename)
+        booking = WalkinBooking(tablename)
         if self.bookingDuplicate(booking, True):
             raise exceptions.TableBusyError
         self.bookings.append(booking)
@@ -698,7 +720,7 @@ class Bookings:
         Raises:
             TableFreeError if not already taken for a walkIn.
         """
-        booking = Booking.WalkIn(tablename)
+        booking = WalkinBooking(tablename)
         if not self.bookingDuplicate(booking, True):
             raise exceptions.TableFreeError
         self.delete(booking)

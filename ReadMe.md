@@ -33,3 +33,11 @@ but also
 >Without special tricks, the interaction between these components occurs only at the command of the browser or the user. 
 
 I was curious what it would take to synchronize shared backend access with real-time updates, and the **pytock** architecture is oriented towards making it feasible. In particular, the `Tables` and `Bookings` classes make use of the streamlit shared resource cache with change detection and propagation. It was a bit tricky to implement but the result is gratifying.
+
+### A Note on Walk-In (ad hoc) Bookings
+
+The assignment description states:
+
+>There must also be a function of taking a table if guests came to the restaurant without a booking.
+
+Because our date/time model is "timeless" and we don't know when the bookings will actually become active in real life, I chose to make walk-in bookings a separate "layer" above the reservations. Because they are separate you can take a table for a walk-in even if it has a reservation, and you can make a reservation for a table that currently has a walk-in. The UI shows both for table status.

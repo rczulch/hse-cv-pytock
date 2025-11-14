@@ -26,11 +26,11 @@ st.logo(
 )
 
 st.html("""
-  <style>
-    [alt=Logo] {
-      height: 10rem;
-    }
-  </style>
+    <style>
+        [alt=Logo] {
+        height: 10rem;
+        }
+    </style>
         """)
 
 #

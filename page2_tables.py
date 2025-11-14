@@ -22,7 +22,7 @@ if "page2_toast" in st.session_state:
     text = st.session_state["page2_toast"]
     st.session_state["page2_toast"] = False
     if text:
-        st.toast(text)
+        st.toast(text, icon=":material/info:")
 
 def toast(text: str) -> None:
     st.session_state["page2_toast"] = text
