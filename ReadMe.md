@@ -14,11 +14,13 @@ Pytock implements a restaurant booking system according to stated specifications
 
 To install the Python environment and prerequisites:
 
-    python -m venv .venv
+    python3.13 -m venv .venv
     source .venv/bin/activate
-    pip install streamlit
+    pip install -r requirements.txt
 
-To execute the software:
+**Note:** This uses 3.13 above to avoid an install error with streamlit dependency *pyarrow* which is evidently not yet updated to work with Python 3.14. Some online sources state that using Conda instead of venv avoids this problem. Despite the voluminous *requirements.txt*, the only direct pytock dependency is streamlit so a virtual environment wouldn't even be necessary if you already have streamlit installed globally.
+
+To execute pytock:
 
     streamlit run pytock.py
 
